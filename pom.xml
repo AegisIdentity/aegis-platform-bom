@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.aegis</groupId>
+    <artifactId>aegis-platform-parent</artifactId>
+    <version>0.1.0</version>
+    <packaging>pom</packaging>
+
+    <name>Aegis Platform Parent</name>
+    <description>
+        Shared Maven parent + dependency BOM for all Aegis Identity Platform services.
+        Pins Java 21, Spring Boot 4.1, common plugin configuration (test, coverage, SAST, CVE),
+        and dependency management for shared libraries and security-relevant third-party libs.
+        Every Aegis service repo declares this as its &lt;parent&gt;.
+    </description>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Aegis shared library version (aegis-platform-commons publishes these) -->
+        <aegis-commons.version>0.1.0</aegis-commons.version>
+
+        <!-- Security-relevant third-party versions.
+             Most others (postgresql, lettuce/redis, kafka, testcontainers, nimbus-jose-jwt,
+             thymeleaf) are managed transitively by the Spring Boot BOM inherited above.
+             Verify these against the current release before a production cut. -->
+        <bouncycastle.version>1.81</bouncycastle.version>
+        <opensaml.version>5.1.4</opensaml.version>
+
+        <!-- Quality-gate plugin versions (run in CI; pluginManagement only so local
+             `mvn verify` stays fast/offline). Verify current versions before enabling in CI. -->
+        <spotbugs-maven-plugin.version>4.9.6.2</spotbugs-maven-plugin.version>
+        <dependency-check-maven.version>12.1.0</dependency-check-maven.version>
+
+        <!-- Per-service coverage floor; defaults to permissive so scaffolds build.
+             Core services override to a real number (e.g. 0.75). -->
+        <jacoco.line.coverage>0.00</jacoco.line.coverage>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Aegis shared libraries (published by aegis-platform-commons) -->
+            <dependency>
+                <groupId>io.aegis</groupId>
+                <artifactId>aegis-security-commons</artifactId>
+                <version>${aegis-commons.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.aegis</groupId>
+                <artifactId>aegis-tenant-context</artifactId>
+                <version>${aegis-commons.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.aegis</groupId>
+                <artifactId>aegis-web-commons</artifactId>
+                <version>${aegis-commons.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.aegis</groupId>
+                <artifactId>aegis-audit-commons</artifactId>
+                <version>${aegis-commons.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.aegis</groupId>
+                <artifactId>aegis-testing-support</artifactId>
+                <version>${aegis-commons.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Bouncy Castle: required on the classpath for Argon2PasswordEncoder -->
+            <dependency>
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bouncycastle.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Unit tests: *Test / *Tests. Managed version from Boot parent. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <includes>
+                            <include>**/*Test.java</include>
+                            <include>**/*Tests.java</include>
+                        </includes>
+                        <excludes>
+                            <exclude>**/*IT.java</exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+
+                <!-- Integration tests: *IT (Testcontainers). Bound below in <plugins>. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <configuration>
+                        <includes>
+                            <include>**/*IT.java</include>
+                        </includes>
+                    </configuration>
+                </plugin>
+
+                <!-- SAST — enabled in CI via `mvn spotbugs:check` (includes FindSecBugs-style rules). -->
+                <plugin>
+                    <groupId>com.github.spotbugs</groupId>
+                    <artifactId>spotbugs-maven-plugin</artifactId>
+                    <version>${spotbugs-maven-plugin.version}</version>
+                    <configuration>
+                        <effort>Max</effort>
+                        <threshold>Medium</threshold>
+                    </configuration>
+                </plugin>
+
+                <!-- Dependency CVE scan — enabled in CI via `mvn dependency-check:check`.
+                     Not bound to the lifecycle (downloads the NVD DB; slow/network-heavy). -->
+                <plugin>
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <version>${dependency-check-maven.version}</version>
+                    <configuration>
+                        <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <suppressionFiles>
+                            <suppressionFile>owasp-suppressions.xml</suppressionFile>
+                        </suppressionFiles>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- Code coverage: report on test, verify a per-service floor on verify. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.line.coverage}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Bind integration tests into the build. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
