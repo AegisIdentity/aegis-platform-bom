@@ -129,14 +129,22 @@
                     </configuration>
                 </plugin>
 
-                <!-- Dependency CVE scan — enabled in CI via `mvn dependency-check:check`.
-                     Not bound to the lifecycle (downloads the NVD DB; slow/network-heavy). -->
+                <!-- Dependency CVE scan — enabled in CI via `mvn dependency-check:check` (or the
+                     `security-scan` profile below). Not bound to the default lifecycle: it downloads
+                     the NVD DB (slow/network-heavy), so keeping it out of `mvn verify` preserves fast
+                     offline local builds.
+
+                     Gate: failBuildOnCVSS=4 fails the build on any Medium-or-higher CVE (CVSS >= 4.0),
+                     tightened from the previous 7 which let CVSS 4.0-6.9 issues pass silently. Trade-off:
+                     a stricter gate surfaces more findings (including ones with no available upgrade);
+                     `owasp-suppressions.xml` is the documented pressure valve for triaged, time-boxed
+                     exceptions (each suppression should carry a justification + review date). -->
                 <plugin>
                     <groupId>org.owasp</groupId>
                     <artifactId>dependency-check-maven</artifactId>
                     <version>${dependency-check-maven.version}</version>
                     <configuration>
-                        <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <failBuildOnCVSS>4</failBuildOnCVSS>
                         <suppressionFiles>
                             <suppressionFile>owasp-suppressions.xml</suppressionFile>
                         </suppressionFiles>
@@ -203,4 +211,52 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Opt-in security scanning. Kept OUT of the default lifecycle so ordinary/offline builds
+             stay fast (SpotBugs analysis + the OWASP NVD download are slow/network-heavy). CI runs
+             the quality gates by activating this profile:
+
+                 mvn -Psecurity-scan verify
+
+             which binds spotbugs:check (SAST) and dependency-check:check (CVE gate, failBuildOnCVSS=4)
+             to the `verify` phase. Equivalently, CI may invoke the goals directly:
+
+                 mvn spotbugs:check dependency-check:check
+
+             This profile is NOT activeByDefault — it must be requested explicitly. -->
+        <profile>
+            <id>security-scan</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>spotbugs-check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.owasp</groupId>
+                        <artifactId>dependency-check-maven</artifactId>
+                        <executions>
+                            <execution>
+                                <id>dependency-check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
