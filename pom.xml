@@ -34,11 +34,15 @@
         <aegis-commons.version>0.1.0</aegis-commons.version>
 
         <!-- Security-relevant third-party versions.
-             Most others (postgresql, lettuce/redis, kafka, testcontainers, nimbus-jose-jwt,
-             thymeleaf) are managed transitively by the Spring Boot BOM inherited above.
+             Most others (postgresql, lettuce/redis, kafka, testcontainers, thymeleaf) are managed
+             transitively by the Spring Boot BOM inherited above.
              Verify these against the current release before a production cut. -->
         <bouncycastle.version>1.81</bouncycastle.version>
         <opensaml.version>5.1.4</opensaml.version>
+        <!-- nimbus-jose-jwt IS managed by Boot, but only for modules that pull in a Spring Security
+             starter. aegis-agent-commons uses JOSE directly (A2A Agent Card signature verification)
+             without one, so it is pinned explicitly here rather than left to a transitive accident. -->
+        <nimbus-jose-jwt.version>10.9</nimbus-jose-jwt.version>
 
         <!-- Quality-gate plugin versions (run in CI; pluginManagement only so local
              `mvn verify` stays fast/offline). Verify current versions before enabling in CI. -->
@@ -77,6 +81,11 @@
                 <groupId>io.aegis</groupId>
                 <artifactId>aegis-agent-commons</artifactId>
                 <version>${aegis-commons.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${nimbus-jose-jwt.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.aegis</groupId>
